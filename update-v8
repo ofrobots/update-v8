@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+chromium_git="https://chromium.googlesource.com"
+v8_dir="deps/v8"
+
+error() {
+  echo $*
+  exit 1
+}
+
+[ ! -e ${v8_dir} ] || error "${v8_dir} already exists"
+
+remote=$(git ls-remote --get-url origin)
+if [[ ! ${remote} =~ github.com.nodejs.node ]]; then
+  error "current directory is not a clone of github.com/nodejs/node"
+fi
+
+[ $# -eq 1 ] || error "Usage: $0 v8_commit_ish"
+v8_commit=$1
+
+# fetch_from_git git_url git_repo directory commit keep_dot_git
+fetch_from_git() {
+  git_url=$1
+  git_repo=$2
+  dir=$3
+  commit=$4
+  keep_dot_git=$5
+
+  [ ! -e ${dir} ]    || error "${dir} already exists"
+  [ ! -z ${commit} ] || error "commit not specified"
+
+  mkdir -p ${dir}
+  pushd ${dir}
+  git init
+  git remote add origin ${git_url}${git_repo}
+  git fetch origin ${commit}
+  git reset --hard FETCH_HEAD
+  if [ -z ${keep_dot_git} ]; then
+    rm -rf .git
+  fi
+  popd
+}
+
+fetch_from_git ${chromium_git} "/v8/v8.git" ${v8_dir} ${v8_commit} "keep"
+
+if [ -d ${v8_dir} ]; then
+  # Commit the v8 update
+  git add deps/v8
+  git commit -m "deps: update V8 to ${v8_commit}"
+
+  sed -i '/\/base/d' ${v8_dir}/.gitignore
+  git add ${v8_dir}/.gitignore
+  git commit -m "deps: edit V8 gitignore to allow trace event copy"
+
+  pushd ${v8_dir}
+  repo=$(grep trace_event/common.git DEPS | awk -F+ '{ print $2 }' | tr -d " \",")
+  commit=$(grep trace_event/common.git DEPS | awk -F+ '{ print $4 }' | tr -d " \",")
+  fetch_from_git ${chromium_git} ${repo} "base/trace_event/common" ${commit}
+  echo "Updated trace_event to ${commit}"
+  popd
+
+  git add "${v8_dir}/base/trace_event/common"
+  git commit -m "deps: update V8 trace event to ${commit}"
+
+  sed -i 's/\/testing\/gtest/\/testing\/gtest\/*\n!\/testing\/gtest\/include\n\/testing\/gtest\/include\/*\n!\/testing\/gtest\/include\/gtest\n\/testing\/gtest\/include\/gtest\/*\n!\/testing\/gtest\/include\/gtest\/gtest_prod.h/' ${v8_dir}/.gitignore
+  git add ${v8_dir}/.gitignore
+  git commit -m "deps: edit V8 gitignore to allow gtest_prod.h copy"
+
+  pushd ${v8_dir}
+  repo=$(grep google/googletest.git DEPS | awk -F+ '{ print $2 }' | tr -d " \",")
+  commit=$(grep google/googletest.git DEPS | awk -F+ '{ print $4 }' | tr -d " \",")
+  fetch_from_git ${chromium_git} ${repo} "testing/gtest" ${commit}
+  echo "Updated gtest to ${commit}"
+  popd
+
+  git add "${v8_dir}/testing/gtest/include/gtest/gtest_prod.h"
+  git commit -m "deps: update V8 gtest to ${commit}"
+fi
