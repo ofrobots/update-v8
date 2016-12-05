@@ -41,38 +41,40 @@ fetch_from_git() {
   popd
 }
 
+# get_v8_dep name repo_name destination
+get_v8_dep() {
+  name=$1
+  repo_name=$2
+  destination=$3
+
+  pushd ${v8_dir}
+  repo=$(  grep ${repo_name} DEPS | awk -F+ '{print $2}' | tr -d " \",")
+  commit=$(grep ${repo_name} DEPS | awk -F+ '{print $4}' | tr -d " \",")
+  fetch_from_git ${chromium_git} ${repo} ${destination} ${commit}
+  echo "Update ${name} to ${commit}"
+  popd
+
+  git add "${v8_dir}/${destination}"
+  git commit -m "deps: update V8 dep ${name} to ${commit}"
+}
+
 fetch_from_git ${chromium_git} "/v8/v8.git" ${v8_dir} ${v8_commit} "keep"
 
-if [ -d ${v8_dir} ]; then
-  # Commit the v8 update
-  git add deps/v8
-  git commit -m "deps: update V8 to ${v8_commit}"
+[ -d ${v8_dir} ] || (echo "unable to fetch v8" ; exit 1)
 
-  sed -i '/\/base/d' ${v8_dir}/.gitignore
-  git add ${v8_dir}/.gitignore
-  git commit -m "deps: edit V8 gitignore to allow trace event copy"
+# Edit the gitignore file
+sed -i '/\/base/d' ${v8_dir}/.gitignore
+sed -i 's/\/testing\/gtest/\/testing\/gtest\/*\n!\/testing\/gtest\/include\n\/testing\/gtest\/include\/*\n!\/testing\/gtest\/include\/gtest\n\/testing\/gtest\/include\/gtest\/*\n!\/testing\/gtest\/include\/gtest\/gtest_prod.h/' ${v8_dir}/.gitignore
+sed -i 's#/third_party/jinja2#!/third_party/jinja2#' ${v8_dir}/.gitignore
+sed -i 's#/third_party/markupsafe#!/third_party/markupsafe#' ${v8_dir}/.gitignore
+sed -i 's#/third_party/inspector_protocol#!/third_party/inspector_protocol#' ${v8_dir}/.gitignore
 
-  pushd ${v8_dir}
-  repo=$(grep trace_event/common.git DEPS | awk -F+ '{ print $2 }' | tr -d " \",")
-  commit=$(grep trace_event/common.git DEPS | awk -F+ '{ print $4 }' | tr -d " \",")
-  fetch_from_git ${chromium_git} ${repo} "base/trace_event/common" ${commit}
-  echo "Updated trace_event to ${commit}"
-  popd
+# Commit the v8 update
+git add deps/v8
+git commit -m "deps: update V8 to ${v8_commit}"
 
-  git add "${v8_dir}/base/trace_event/common"
-  git commit -m "deps: update V8 trace event to ${commit}"
-
-  sed -i 's/\/testing\/gtest/\/testing\/gtest\/*\n!\/testing\/gtest\/include\n\/testing\/gtest\/include\/*\n!\/testing\/gtest\/include\/gtest\n\/testing\/gtest\/include\/gtest\/*\n!\/testing\/gtest\/include\/gtest\/gtest_prod.h/' ${v8_dir}/.gitignore
-  git add ${v8_dir}/.gitignore
-  git commit -m "deps: edit V8 gitignore to allow gtest_prod.h copy"
-
-  pushd ${v8_dir}
-  repo=$(grep google/googletest.git DEPS | awk -F+ '{ print $2 }' | tr -d " \",")
-  commit=$(grep google/googletest.git DEPS | awk -F+ '{ print $4 }' | tr -d " \",")
-  fetch_from_git ${chromium_git} ${repo} "testing/gtest" ${commit}
-  echo "Updated gtest to ${commit}"
-  popd
-
-  git add "${v8_dir}/testing/gtest/include/gtest/gtest_prod.h"
-  git commit -m "deps: update V8 gtest to ${commit}"
-fi
+# fetch V8 DEPS that we need to build Node
+get_v8_dep "trace_event" "trace_event/common.git" "base/trace_event/common"
+get_v8_dep "gtest" "google/googletest.git" "testing/gtest"
+get_v8_dep "jinja2" "src/third_party/jinja2.git" "third_party/jinja2"
+get_v8_dep "markupsafe" "src/third_party/markupsafe.git" "third_party/markupsafe"
