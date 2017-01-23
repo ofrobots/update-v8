@@ -62,12 +62,11 @@ fetch_from_git ${chromium_git} "/v8/v8.git" ${v8_dir} ${v8_commit} "keep"
 
 [ -d ${v8_dir} ] || (echo "unable to fetch v8" ; exit 1)
 
-# Edit the gitignore file
-sed -i.bak '/\/base/d' ${v8_dir}/.gitignore
-sed -i.bak 's/\/testing\/gtest/\/testing\/gtest\/*\n!\/testing\/gtest\/include\n\/testing\/gtest\/include\/*\n!\/testing\/gtest\/include\/gtest\n\/testing\/gtest\/include\/gtest\/*\n!\/testing\/gtest\/include\/gtest\/gtest_prod.h/' ${v8_dir}/.gitignore
-sed -i.bak 's#/third_party/jinja2#!/third_party/jinja2#' ${v8_dir}/.gitignore
-sed -i.bak 's#/third_party/markupsafe#!/third_party/markupsafe#' ${v8_dir}/.gitignore
-sed -i.bak 's#^/third_party/inspector_protocol#!/third_party/inspector_protocol#' ${v8_dir}/.gitignore
+# Edit .gitignore
+sed -i.bak "/\/base/d" ${v8_dir}/.gitignore
+sed -i.bak "s#^/testing/gtest#/testing/gtest/*\n!/testing/gtest/include\n/testing/gtest/include/*\n!/testing/gtest/include/gtest\n/testing/gtest/include/gtest/*\n!/testing/gtest/include/gtest/gtest_prod.h#" ${v8_dir}/.gitignore
+echo "!/third_party/jinja2" >> ${v8_dir}/.gitignore
+echo "!/third_party/markupsafe" >> ${v8_dir}/.gitignore
 
 # Commit the v8 update
 git add deps/v8
